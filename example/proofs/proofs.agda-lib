@@ -1,0 +1,5 @@
+name: proofs
+include:
+  .
+depend:
+  standard-library-1.7.1
