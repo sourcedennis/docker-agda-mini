@@ -15,7 +15,7 @@ Tagging convention:
 
 If you have a local directory with Agda proofs called `proofs/`, you can create a `Dockerfile` like:
 
-```
+```Dockerfile
 FROM sourcedennis/agda-mini:2.6.2.1-1.7.1
 
 WORKDIR /proofs
@@ -23,20 +23,33 @@ COPY proofs .
 ```
 
 Which you then build into a Docker image with:
-```
+```bash
 docker build . --tag=my-proofs
 ```
 
 You can execute your proofs with (assuming your `proofs/` directory contains a file `Proof.agda`):
-```
+```bash
 docker run -it --rm my-proofs agda Proof.agda
 ```
 
 As Agda can render proofs to HTML, you can also run:
-```
+```bash
 docker run -it --rm -v "$PWD/html:/proofs/html" my-proofs agda --html --html-dir=html Proof.agda
 ```
 This creates a local `html/` directory. You can open `html/Proof.html` in any browser.
+
+## Building the images
+
+To build the Docker images with the `Dockerfile`s here, run these commands:
+
+* Without the standard library (modify the version):
+  ```bash
+  docker build . --tag agda-mini:2.6.2.1 --build-arg AGDA_VERSION=2.6.2.1 --file Dockerfile
+  ```
+* With the standard library (modify the versions)
+  ```bash
+  docker build . --tag agda-mini:2.6.2.1-1.7.1 --build-arg AGDA_VERSION=2.6.2.1 --build-arg STDLIB_VERSION=1.7.1 --file Dockerfile-stdlib
+  ```
 
 ## License
 
