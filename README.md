@@ -4,7 +4,7 @@ Small Docker images containing Agda.
 
 See also: https://hub.docker.com/r/sourcedennis/agda-mini
 
-The main purpose of these images is to provide *easily reproducible* Agda executions. Existing images were often humongous, at roughly \~2 GB (uncompressed). While mine are much smaller (\~130MB uncompressed - 40MB compressed).
+The main purpose of these images is to provide *easily reproducible* Agda executions. Existing images were often humongous, at roughly \~2 GB (uncompressed). While mine are much smaller (\~150MB uncompressed - 50MB compressed).
 
 Tagging convention:
 
@@ -19,8 +19,10 @@ If you have a local directory with Agda proofs called `proofs/`, you can create 
 FROM sourcedennis/agda-mini:2.6.2.1-1.7.1
 
 WORKDIR /proofs
-COPY proofs .
+COPY --chown=proof:proof proofs .
 ```
+
+Note that `proof` is the user, which avoids issues with root.
 
 Which you then build into a Docker image with:
 ```bash
@@ -46,10 +48,22 @@ To build the Docker images with the `Dockerfile`s here, run these commands:
   ```bash
   docker build . --tag agda-mini:2.6.2.1 --build-arg AGDA_VERSION=2.6.2.1 --file Dockerfile
   ```
-* With the standard library (modify the versions)
+* With the standard library (modify the versions):
   ```bash
-  docker build . --tag agda-mini:2.6.2.1-1.7.1 --build-arg AGDA_VERSION=2.6.2.1 --build-arg STDLIB_VERSION=1.7.1 --file Dockerfile-stdlib
+  docker build . --tag agda-mini:2.6.2.1-1.7.1 --build-arg AGDA_VERSION=2.6.2.1 --build-arg STDLIB_VERSION=1.7.1 --file stdlib.Dockerfile
   ```
+
+### Nightly
+
+Theres also a `nightly.Dockerfile` for Agda's [nightly release](https://github.com/agda/agda/releases/tag/nightly). It requires setting `AGDA_VERSION` to the version of next release (currently 2.6.3). Build it with:
+```bash
+docker build . --tag agda-mini:nightly --build-arg AGDA_VERSION=2.6.3 --file nightly.Dockerfile
+```
+I don't push the nightly version to DockerHub, because I don't think it should be used for reproducible builds.
+
+### Build History
+
+The images on Dockerhub were built with `build.sh`. I rebuild them whenever a `Dockerfile` changes.
 
 ## License
 

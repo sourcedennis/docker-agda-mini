@@ -1,5 +1,5 @@
-# Set this as a build arg
-# Example: `docker build --build-arg AGDA_VERSION=2.6.2.2`
+# Set this as a build arg. Note that this must be the current version of nightly!
+# Example: `docker build --build-arg AGDA_VERSION=2.6.3`
 ARG AGDA_VERSION
 # We need a Cabal version that still supports the `v1-install`,
 # which generates no hashes in its paths
@@ -17,13 +17,12 @@ ARG GHC_VERSION=8.6.5
 FROM debian:buster-slim AS build
 
 # reclaim arguments from outer scope
-ARG AGDA_VERSION
 ARG GHC_VERSION
 ARG CABAL_VERSION
 
 # Install Agda's build dependencies
 RUN apt-get update &&\
-    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales &&\
+    apt-get install -y --no-install-recommends zlib1g-dev build-essential wget curl libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales &&\
     rm -rf /var/lib/apt/lists/*
 
 # Older Agda versions seemingly have Happy grammars with UTF-8.
@@ -58,8 +57,9 @@ WORKDIR /usr/local/bin
 # It is installed to `/bin/agda`
 # We specifically use the `v1-install`,
 # as it does /not/ generate a hash in the path
-RUN cabal get Agda-${AGDA_VERSION} &&\
-    cd Agda-${AGDA_VERSION} &&\
+RUN wget -O agda-nightly.tar.gz https://github.com/agda/agda/archive/refs/tags/nightly.tar.gz &&\
+    tar -zxvf agda-nightly.tar.gz &&\
+    cd agda-nightly &&\
     cabal v1-install --flags="optimise-heavily" --prefix=/ -O2
 
 
@@ -83,9 +83,6 @@ RUN apt-get update &&\
 
 # Agda built-in library
 COPY --from=build /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION} /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}
-
-# The "proof" user needs write permissions to write the *.agdai files.
-RUN chmod -R a+w /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}/lib
 
 # Agda executable
 COPY --from=build /bin/agda /bin/agda

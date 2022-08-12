@@ -26,9 +26,18 @@ ARG STDLIB_VERSION
 
 # Install Agda's build dependencies
 RUN apt-get update &&\
-    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl wget libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates &&\
+    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl wget libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales &&\
     rm -rf /var/lib/apt/lists/*
 
+# Older Agda versions seemingly have Happy grammars with UTF-8.
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# Download Haskell
 RUN curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_MINIMAL=1 sh
 
 ENV PATH=/root/.ghcup/bin:/root/.cabal/bin:${PATH}
@@ -37,9 +46,14 @@ RUN ghcup install ghc ${GHC_VERSION} --set
 RUN ghcup install cabal ${CABAL_VERSION} --set
 
 # Install Agda dependencies
+# 
+# Note that "cpphs" is not needed for newer versions of Agda.
+# But it is needed for the older versions, so we include it.
+# This is only the build stage anyway.
 RUN cabal v2-update &&\
     cabal v2-install alex &&\
-    cabal v2-install happy
+    cabal v2-install happy &&\
+    cabal v2-install cpphs
 
 WORKDIR /usr/local/bin
 
@@ -49,7 +63,7 @@ WORKDIR /usr/local/bin
 # as it does /not/ generate a hash in the path
 RUN cabal get Agda-${AGDA_VERSION} &&\
     cd Agda-${AGDA_VERSION} &&\
-    cabal v1-install --prefix=/ -O2
+    cabal v1-install --flags="optimise-heavily" --prefix=/ -O2
 
 # Download and unpack the standard library
 RUN wget -O agda-stdlib.tar.gz https://github.com/agda/agda-stdlib/archive/v${STDLIB_VERSION}.tar.gz &&\
@@ -78,12 +92,19 @@ RUN apt-get update &&\
 # Agda built-in library
 COPY --from=build /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION} /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}
 
+# The "proof" user needs write permissions to write the *.agdai files.
+RUN chmod -R a+w /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}/lib
+
 # Agda executable
 COPY --from=build /bin/agda /bin/agda
 
+RUN useradd -ms /bin/bash proof
+USER proof
+WORKDIR /home/proof
+
 # Agda stdlib
-COPY --from=build /usr/local/bin/agda-stdlib-${STDLIB_VERSION} /usr/local/bin/agda-stdlib-${STDLIB_VERSION}
+COPY --from=build --chown=proof:proof /usr/local/bin/agda-stdlib-${STDLIB_VERSION} /home/proof/agda-stdlib-${STDLIB_VERSION}
 
 # Make sure Agda can find the stdlib
-RUN mkdir /root/.agda &&\
-    echo "/usr/local/bin/agda-stdlib-${STDLIB_VERSION}/standard-library.agda-lib" > /root/.agda/libraries
+RUN mkdir /home/proof/.agda &&\
+    echo "/home/proof/agda-stdlib-${STDLIB_VERSION}/standard-library.agda-lib" > /home/proof/.agda/libraries
