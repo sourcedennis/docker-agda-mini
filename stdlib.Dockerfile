@@ -16,7 +16,7 @@ ARG GHC_VERSION=8.6.5
 # thus rather large (~2 GB). To avoid that, there is another
 # stage below.
 #
-FROM debian:buster-slim AS build
+FROM debian:bookworm-slim AS build
 
 # reclaim arguments from outer scope
 ARG AGDA_VERSION
@@ -24,9 +24,13 @@ ARG GHC_VERSION
 ARG CABAL_VERSION
 ARG STDLIB_VERSION
 
+# Resolve Docker proxy issues
+# See https://gist.github.com/trastle/5722089
+RUN echo "Acquire::http::Pipeline-Depth \"0\";\nAcquire::http::No-Cache=True;\nAcquire::BrokenProxy=true;" > /etc/apt/apt.conf.d/99fixbadproxy
+
 # Install Agda's build dependencies
 RUN apt-get update &&\
-    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl wget libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales &&\
+    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl wget libffi-dev libffi8 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales pkg-config &&\
     rm -rf /var/lib/apt/lists/*
 
 # Older Agda versions seemingly have Happy grammars with UTF-8.
@@ -76,7 +80,7 @@ RUN wget -O agda-stdlib.tar.gz https://github.com/agda/agda-stdlib/archive/v${ST
 # executable into a clean container. We ensure all runtime
 # dependencies are present.
 #
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 # reclaim arguments from outer scope
 ARG AGDA_VERSION

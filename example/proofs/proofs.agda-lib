@@ -2,4 +2,4 @@ name: proofs
 include:
   .
 depend:
-  standard-library-1.7.1
+  standard-library-2.0
