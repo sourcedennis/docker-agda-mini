@@ -16,7 +16,7 @@ ARG GHC_VERSION=8.6.5
 # thus rather large (~2 GB). To avoid that, there is another
 # stage below.
 #
-FROM debian:bookworm-slim AS build
+FROM alpine:3.20 AS build
 
 # reclaim arguments from outer scope
 ARG AGDA_VERSION
@@ -24,22 +24,9 @@ ARG GHC_VERSION
 ARG CABAL_VERSION
 ARG STDLIB_VERSION
 
-# Resolve Docker proxy issues
-# See https://gist.github.com/trastle/5722089
-RUN echo "Acquire::http::Pipeline-Depth \"0\";\nAcquire::http::No-Cache=True;\nAcquire::BrokenProxy=true;" > /etc/apt/apt.conf.d/99fixbadproxy
-
 # Install Agda's build dependencies
-RUN apt-get update &&\
-    apt-get install -y --no-install-recommends zlib1g-dev build-essential curl wget libffi-dev libffi8 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 ca-certificates locales pkg-config &&\
-    rm -rf /var/lib/apt/lists/*
-
-# Older Agda versions seemingly have Happy grammars with UTF-8.
-RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
-    locale-gen
-
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+RUN apk upgrade --no-cache &&\
+    apk add --no-cache alpine-sdk curl ncurses-dev gmp-dev perl zlib-dev cabal
 
 # Download Haskell
 RUN curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_MINIMAL=1 sh
@@ -47,19 +34,21 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTR
 ENV PATH=/root/.ghcup/bin:/root/.cabal/bin:${PATH}
 
 RUN ghcup install ghc ${GHC_VERSION} --set
-RUN ghcup install cabal ${CABAL_VERSION} --set
+
+WORKDIR /usr/local/bin
+
+RUN git clone --depth 1 --branch cabal-install-v${CABAL_VERSION} https://github.com/haskell/cabal.git
+
+RUN cd cabal/cabal-install &&\
+    ./bootstrap.sh
 
 # Install Agda dependencies
 # 
 # Note that "cpphs" is not needed for newer versions of Agda.
 # But it is needed for the older versions, so we include it.
 # This is only the build stage anyway.
-RUN cabal v2-update &&\
-    cabal v2-install alex &&\
-    cabal v2-install happy &&\
-    cabal v2-install cpphs
-
-WORKDIR /usr/local/bin
+RUN cabal v1-update
+RUN cabal v1-install alex happy cpphs
 
 # Build Agda with Cabal (This takes a long time)
 # It is installed to `/bin/agda`
@@ -67,7 +56,11 @@ WORKDIR /usr/local/bin
 # as it does /not/ generate a hash in the path
 RUN cabal get Agda-${AGDA_VERSION} &&\
     cd Agda-${AGDA_VERSION} &&\
-    cabal v1-install --flags="optimise-heavily" --prefix=/ -O2
+    cabal v1-install -f optimise-heavily --enable-split-sections --prefix=/ --enable-static -O2
+
+RUN addgroup -S proof && adduser -S proof -G proof
+USER proof
+WORKDIR /home/proof
 
 # Download and unpack the standard library
 RUN wget -O agda-stdlib.tar.gz https://github.com/agda/agda-stdlib/archive/v${STDLIB_VERSION}.tar.gz &&\
@@ -80,7 +73,7 @@ RUN wget -O agda-stdlib.tar.gz https://github.com/agda/agda-stdlib/archive/v${ST
 # executable into a clean container. We ensure all runtime
 # dependencies are present.
 #
-FROM debian:bookworm-slim
+FROM alpine:3.20
 
 # reclaim arguments from outer scope
 ARG AGDA_VERSION
@@ -88,10 +81,7 @@ ARG GHC_VERSION
 ARG STDLIB_VERSION
 
 # Install Agda runtime dependencies
-RUN apt-get update &&\
-    apt-get install -y --no-install-recommends libatomic1 &&\
-    apt-get clean -y && apt-get autoclean -y && apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/* /var/lib/log/* /tmp/* /var/tmp/*
+RUN apk add --no-cache libatomic ncurses gmp
 
 # Agda built-in library
 COPY --from=build /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION} /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}
@@ -102,12 +92,12 @@ RUN chmod -R a+w /share/x86_64-linux-ghc-${GHC_VERSION}/Agda-${AGDA_VERSION}/lib
 # Agda executable
 COPY --from=build /bin/agda /bin/agda
 
-RUN useradd -ms /bin/bash proof
+RUN addgroup -S proof && adduser -S proof -G proof
 USER proof
 WORKDIR /home/proof
 
 # Agda stdlib
-COPY --from=build --chown=proof:proof /usr/local/bin/agda-stdlib-${STDLIB_VERSION} /home/proof/agda-stdlib-${STDLIB_VERSION}
+COPY --from=build --chown=proof:proof /home/proof/agda-stdlib-${STDLIB_VERSION} /home/proof/agda-stdlib-${STDLIB_VERSION}
 
 # Make sure Agda can find the stdlib
 RUN mkdir /home/proof/.agda &&\

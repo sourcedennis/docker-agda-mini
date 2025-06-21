@@ -53,14 +53,6 @@ To build the Docker images with the `Dockerfile`s here, run these commands:
   docker build . --tag agda-mini:2.6.2.1-1.7.1 --build-arg AGDA_VERSION=2.6.2.1 --build-arg STDLIB_VERSION=1.7.1 --file stdlib.Dockerfile
   ```
 
-### Nightly
-
-Theres also a `nightly.Dockerfile` for Agda's [nightly release](https://github.com/agda/agda/releases/tag/nightly). It requires setting `AGDA_VERSION` to the version of next release (currently 2.6.3). Build it with:
-```bash
-docker build . --tag agda-mini:nightly --build-arg AGDA_VERSION=2.6.3 --file nightly.Dockerfile
-```
-I don't push the nightly version to DockerHub, because I don't think it should be used for reproducible builds.
-
 ### Build History
 
 The images on Dockerhub were built with `build.sh`. I rebuild them whenever a `Dockerfile` changes.
